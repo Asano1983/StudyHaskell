@@ -1,148 +1,76 @@
 
-# Item 9 do記法
+## Item 9 型クラス
 
-## do記法
+### 型クラスShow
 
-do記法を用いると、Just 16 >>= div2 >>= div2 >>= div2の代わりに次のように書くことができる。
+型クラスShowは文字列として出力できる型の集合である。
+deriving Showする代わりにinstance Showすることによって、
+show関数をユーザー定義することができる。
 
 ```
+Prelude> data Animal = Cat | Dog | Monkey
 Prelude> :{
-Prelude| do
-Prelude|   x <- Just 16
-Prelude|   y <- div2 x
-Prelude|   z <- div2 y
-Prelude|   div2 z
+Prelude| instance Show Animal where
+Prelude|     show Cat = "CAT"
+Prelude|     show Dog = "DOG"
+Prelude|     show Monkey = "MONKEY"
 Prelude| :}
-Just 2
+Prelude> Cat
+CAT
+Prelude> Dog
+DOG
 ```
 
-あたかも命令型言語における逐次実行を実現しているように見えるが、
-これは>>=を使ったコードのシンタックス・シュガーである。
-do記法においては、実行したい命令文を上から順に記述することができ、
-Maybe a型の値（文脈の付いた値）に対しては、<-で中身を取り出すことができる。
-単にa型の値（文脈の付いていない値）に対しては、従来通りletで受ければよい。
+自動生成されるshow関数で十分であるときはderiving Showで自動導出すればよい。
+また、型クラスShowのインスタンスになれば、
+showsPrecやshowListなども定義せずに使うことができる。
+
+### 型クラスEq
+
+型クラスEqの定義は
 
 ```
-Prelude> :{
-Prelude| do
-Prelude|   let x = 16
-Prelude|   y <- div2 x
-Prelude|   z <- div2 y
-Prelude|   div2 z
-Prelude| :}
-Just 2
+class Eq a where
+    (==) :: a -> a -> Bool
+    (/=) :: a -> a -> Bool
+    x == y = not (x /= y)
+    x /= y = not (x == y)
 ```
 
-途中で計算が失敗する場合はNothingを返す。
-命令型言語において例外を投げることに相当する。
+のようになっており、
+deriving Eqするか、
+instance Eqして関数(==)か関数(/=)のいずれかを定義すれば型クラスEqのインスタンスとなる。
+
+### 型クラスOrd
+
+型クラスOrdは順序付け可能な型の集合である。
+型クラスOrdの定義は
 
 ```
-Prelude> :{
-Prelude| do
-Prelude|   let x = 13
-Prelude|   y <- div2 x
-Prelude|   z <- div2 y
-Prelude|   div2 z
-Prelude| :}
-Nothing
+class Eq a => Ord a where
+  compare :: a -> a -> Ordering
+  (<) :: a -> a -> Bool
+  (<=) :: a -> a -> Bool
+  (>) :: a -> a -> Bool
+  (>=) :: a -> a -> Bool
+  max :: a -> a -> a
+  min :: a -> a -> a
+  -- いろいろデフォルト実装が書いてある
 ```
 
-## do記法の大雑把な解釈
+のようになっている。
+型クラスOrdに属するためには型クラスEqのインスタンスである必要がある。
+型クラスEqのインスタンスに対して、関数compareか関数(<=)を定義すれば型クラスOrdのインスタンスとなる。
+compareを定義することの方が効率的であることが多い。
 
-do記法は大雑把には次のルールで解釈されるようなシンタックス・シュガーである。
+### アドホック多相
 
-1. do {e} → e
-1. do {e; es} → e >> do {es}
-1. do {let decls; es} → let decls in do {es}
-1. do {p <- e; es} → e >>= \p -> es
+上述のようにあるクラス型に属するデータ型を定義する際に、
+必要な関数を独自に定義することができる。
+このため、例えば、show :: Show a => a -> Stringは1つの関数であるが、
+型ごとの実装にディスパッチすることができている。
+このようにクラス型を利用することでアドホック多相を実現することができる。
 
-「\p -> es」はpに対してesを返すラムダ式（無名関数）である。
-簡単な例で説明する。
-
-```
-Prelude> :{
-Prelude| do
-Prelude|   div2 10
-Prelude|   div2 20
-Prelude| :}
-Just 10
-```
-
-このコードはdiv2 10 >> div2 20と解釈される。
-前者の計算は成功するので、後者の計算結果であるJust 10を戻す。
-
-```
-Prelude> :{
-Prelude| do
-Prelude|   div2 13
-Prelude|   div2 20
-Prelude| :}
-Nothing
-```
-
-このコードはdiv2 13 >> div2 20と解釈される。
-前者の計算が失敗するので、Nothingを戻すことになる。
-
-```
-Prelude> :{
-Prelude| do
-Prelude|   let x = 16
-Prelude|   div2 x
-Prelude| :}
-Just 8
-```
-
-このコードはlet x = 16 in div2 xと解釈されるので、Just 8を戻すことになる。
-
-```
-Prelude> :{
-Prelude| do
-Prelude|  x <- Just 16
-Prelude|  div2 x
-Prelude| :}
-Just 8
-```
-
-このコードはJust 16 >>= \x -> div2 x と解釈されるので、Just 8を戻すことになる。
-
-## do記法の正確な解釈
-
-do記法は正確には次のルールで解釈されるようなシンタックス・シュガーである。
-
-1. do {e} → e
-1. do {e; es} → e >> do {es}
-1. do {let decls; es} → let decls in do {es}
-1. do {p <- e; es} → let ok p = do {es} ; ok _ = fail "..." in e >>= ok
-
-違いは4番目にある。
-1行に書くと読みにくいので再掲するが、okの定義にはパターンマッチを使用している。
-
-```
-let ok p = do {es} 
-    ok _ = fail "..."
-  in e >>= ok
-```
-
-パターンマッチが成功したときには\p -> esを使ってもokを使っても同じことであるが、
-パターンマッチが失敗したときに関数failを呼び出す点が異なっている。
-
-関数failは型クラスMonadのインスタンスである型に対して定義されている関数で、
-基本的には（オーバーライドしなければ）例外を投げるだけの関数である。
-
-```
-Prelude> :t fail
-fail :: Monad m => String -> m a
-Prelude> fail "..."
-*** Exception: user error (...)
-```
-
-## Monadの役割
-
-このように型クラスMonadのインスタンスであるような型については、
-do記法を用いることができ、命令型言語における命令的記述をエミュレートすることができる。
-
-Maybeは命令型言語における例外をエミュレートしているが、
-後述するIOは入出力を、Stateは状態に対する破壊的代入をエミュレートする。
-このようにHaskellは純粋関数型言語であり、副作用を持つ文を一切認めないが、
-型クラスMonadに属する型を使うことによって、命令型言語における副作用を持つような命令的記述と同等のことをエミュレートできる。
+C++やJavaのオーバーライドに似ていなくもないが、クラス型はクラスではないことに注意しよう。
+しいて言えば、C++の関数テンプレートのオーバーロードに近い。
 

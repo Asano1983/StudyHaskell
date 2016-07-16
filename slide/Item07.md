@@ -1,76 +1,98 @@
 
-## Item 7 型クラス
+# Item 7 入出力
 
-### 型クラスShow
+## unit型 ()
 
-型クラスShowは文字列として出力できる型の集合である。
-deriving Showする代わりにinstance Showすることによって、
-show関数をユーザー定義することができる。
+unit型 ()は()という何も持たないタプルのみを値として持つ型である。
+C言語のvoid型のようなものであり、副作用を持つ関数の戻り値の型に使われる。
+
+## 標準入出力
+
+関数putStrLnは文字列を標準出力へ出力する関数である。
+戻り値の型はIO ()という、unit型 ()にIOという「文脈」が付いた型であるが、詳しくは後述する。
 
 ```
-Prelude> data Animal = Cat | Dog | Monkey
+Prelude> :t putStrLn
+putStrLn :: String -> IO ()
+```
+
+関数getLineは文字列を標準入力から入力する関数である。
+戻り値の型はIO Stringという、String型にIOという「文脈」が付いた型であるが、詳しくは後述する。
+
+```
+Prelude> :t getLine
+getLine :: IO String
+```
+
+## ファイル入出力
+
+関数writeFileは文字列をファイルに出力する関数である。
+関数writeFileはファイルに対して文字列を上書き保存する（追記はappendFileで出来る）。
+
+```
+Prelude> :t writeFile
+writeFile :: FilePath -> String -> IO ()
+```
+
+関数readFileは文字列をファイルから取得する関数である。
+
+```
+Prelude> :t readFile
+readFile :: FilePath -> IO String
+```
+
+## do記法による使用例1
+
+do記法（Item 11で後述）を用いて、命令型プログラミングをエミュレートしてみる。
+
+```
 Prelude> :{
-Prelude| instance Show Animal where
-Prelude|     show Cat = "CAT"
-Prelude|     show Dog = "DOG"
-Prelude|     show Monkey = "MONKEY"
+Prelude| do
+Prelude|     name <- getLine
+Prelude|     putStrLn ("Hello " ++ name)
 Prelude| :}
-Prelude> Cat
-CAT
-Prelude> Dog
-DOG
+Taro
+Hello Taro
 ```
 
-自動生成されるshow関数で十分であるときはderiving Showで自動導出すればよい。
-また、型クラスShowのインスタンスになれば、
-showsPrecやshowListなども定義せずに使うことができる。
+do記法の1行目ではgetLineの戻り値（IO String型）の中身をname（String型）で束縛している。
+do記法の2行目ではputStrLn ("Hello " ++ name)を実行している。
+これは命令型プログラミングにおける逐次実行（をエミュレートしたもの）と考えてよい。
+Taroを入力すると、Hello Taroが出力される。
 
-### 型クラスEq
+## do記法による使用例2
 
-型クラスEqの定義は
-
-```
-class Eq a where
-    (==) :: a -> a -> Bool
-    (/=) :: a -> a -> Bool
-    x == y = not (x /= y)
-    x /= y = not (x == y)
-```
-
-のようになっており、
-deriving Eqするか、
-instance Eqして関数(==)か関数(/=)のいずれかを定義すれば型クラスEqのインスタンスとなる。
-
-### 型クラスOrd
-
-型クラスOrdは順序付け可能な型の集合である。
-型クラスOrdの定義は
+次のソースファイルItem07-01.hsを作成する。
 
 ```
-class Eq a => Ord a where
-  compare :: a -> a -> Ordering
-  (<) :: a -> a -> Bool
-  (<=) :: a -> a -> Bool
-  (>) :: a -> a -> Bool
-  (>=) :: a -> a -> Bool
-  max :: a -> a -> a
-  min :: a -> a -> a
-  -- いろいろデフォルト実装が書いてある
+main = do
+  name <- readFile "Item07-input.txt"
+  writeFile "Item07-output1.txt" ("Hello " ++ name)
 ```
 
-のようになっている。
-型クラスOrdに属するためには型クラスEqのインスタンスである必要がある。
-型クラスEqのインスタンスに対して、関数compareか関数(<=)を定義すれば型クラスOrdのインスタンスとなる。
-compareを定義することの方が効率的であることが多い。
+2行目ではreadFile "Item07-input.txt"の中身をname（String型）で束縛している。
+3行目ではwriteFile "Item07-output1.txt" ("Hello " ++ name)を実行している。
+これは命令型プログラミングにおける逐次実行（をエミュレートしたもの）と考えてよい。
 
-### アドホック多相
+Item07-input.txtには文字列Taroを入れておく。
 
-上述のようにあるクラス型に属するデータ型を定義する際に、
-必要な関数を独自に定義することができる。
-このため、例えば、show :: Show a => a -> Stringは1つの関数であるが、
-型ごとの実装にディスパッチすることができている。
-このようにクラス型を利用することでアドホック多相を実現することができる。
+```
+Prelude> :cd source_codes\\StudyHaskell\\src
+Prelude> writeFile "Item07-input.txt" "Taro"
+Prelude> readFile "Item07-input.txt"
+Taro"
+```
 
-C++やJavaのオーバーライドに似ていなくもないが、クラス型はクラスではないことに注意しよう。
-しいて言えば、C++の関数テンプレートのオーバーロードに近い。
+上のソースファイルItem07-01.hsをロードして、実行してみると、
+Item07-output1.txtが生成され、文字列Hello Taroが入っている。
+
+```
+Prelude> :cd StudyHaskell\\src
+Prelude> :load Item07-01.hs
+[1 of 1] Compiling Main             ( Item07-01.hs, interpreted )
+Ok, modules loaded: Main.
+*Main> main
+*Main> readFile "Item07-output1.txt"
+"Hello Taro"
+```
 

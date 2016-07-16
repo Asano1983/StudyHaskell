@@ -1,245 +1,194 @@
 
-# Item 10 IO（作成中）
+# Item 10 Maybe
 
-## IOの定義
+## Maybeの定義
 
-IOは型aを引数に取って、型IO aを戻す型コンストラクタである。
-関数の戻り値の型がIO aであることは、その関数が入出力を行っている可能性があることを意味している。
-
-```
-Prelude> :i IO
-newtype IO a
-  = GHC.Types.IO (GHC.Prim.State# GHC.Prim.RealWorld
-                  -> (# GHC.Prim.State# GHC.Prim.RealWorld, a #))
-```
-
-クライアントから隠蔽するために複雑な型名になっているが、
-簡単に書けば、RealWorld -> (RealWorld, a)型のことである。
-計算前の世界を引数に取って「計算後の世界（RealWorld型）と計算結果（a型）」を返す関数の型である。
-
-## 標準入出力
-
-文字列を標準出力へ出力する関数putStrLnの型はString -> IO ()である。
-文字列に対して「計算前の世界に対して、引数を画面に出力するという変化を与えた後の世界を返す関数」を返す関数である。
+リストの型を生成する[]は組み込みの型コンストラクタであった。
+[]は型aを引数に取って、型[a]を戻す。
 
 ```
-Prelude> :t putStrLn
-putStrLn :: String -> IO ()
+Prelude> :i []
+data [] a = [] | a : [a]
+Prelude> :k []
+[] :: * -> *
 ```
 
-文字列を標準入力から入力する関数getLineの型はIO Stringである。
-計算前の世界に対して「計算後の世界とString型の計算結果」を返す関数である。
+Maybeも同様に型aを引数に取って、型Maybe aを戻す型コンストラクタである。
 
 ```
-Prelude> :t getLine
-getLine :: IO String
+Prelude> :i Maybe
+data Maybe a = Nothing | Just a
+Prelude> :k Maybe
+Maybe :: * -> *
 ```
 
-## ファイル入出力
-
-文字列をファイルに出力する関数writeFileの型はFilePath -> String -> IO ()である。
-ファイルパスと文字列を引数に取って、「世界に対して、書き込み後の世界を返す関数」を返す。
-この場合、世界をファイルの状態と思ってもよい。
-関数writeFileはファイルに対して文字列を上書き保存する（追記はappendFileで出来る）。
+型Maybe aは型aにNothingを付け加えた型（直和型）であり、
+Just :: a -> Maybe aによってaはMaybe aに埋め込まれている。
+関数の戻り値の型がMaybe aであることは、その関数が失敗する可能性があることを意味している。
 
 ```
-Prelude> :t writeFile
-writeFile :: FilePath -> String -> IO ()
+Prelude> :{
+Prelude| let div2 :: Int -> Maybe Int
+Prelude|     div2 x = if even x then Just (x `div` 2)
+Prelude|                        else Nothing
+Prelude| :}
+Prelude> div2 10
+Just 5
+Prelude> div2 13
+Nothing
 ```
 
-文字列をファイルから取得する関数readFileの型はFilePath -> IO Stringである。
-ファイルパスとを引数に取って、「計算前の世界に対して「計算後の世界とString型の計算結果」を返す関数」を返す。
-この場合、世界をファイルの状態と思ってもよく、readFileはファイルの状態を変えないので、世界については恒等的である。
+この関数div2は命令型言語における「例外を投げるかもしれない関数」に似ている。
+Haskellは参照透過な関数のみを取り扱うが、このような形で例外という命令型言語の機能を実現することができる。
+
+## 型クラスFunctorと関数fmap
+
+次のコードはエラーになる。
+div2 10の型はMaybe Intであり、1の型はIntであるからである。
 
 ```
-Prelude> :t readFile
-readFile :: FilePath -> IO String
+Prelude> div2 10 + 1
+
+<interactive>:57:9:
+    No instance for (Num (Maybe Int)) arising from a use of ‘+’
+    In the expression: div2 10 + 1
+    In an equation for ‘it’: it = div2 10 + 1
 ```
 
-## do記法による使用例
-
-do記法を用いて、命令型プログラミングをエミュレートしてみる。
-次のソースファイルを作成する。
-
-```haskell:Item10-01.hs
-main = do
-  name <- readFile "Item10-input.txt"
-  writeFile "Item10-output1.txt" ("Hello " ++ name)
-```
-
-Item10-input.txtには文字列Taroを入れておく。
+関数fmapを用いると、(+ 1) :: Int -> Int をMaybe Int -> Maybe Int に自然に拡張することができる。
 
 ```
-Prelude> :cd source_codes\\StudyHaskell\\src
-Prelude> writeFile "Item10-input.txt" "Taro"
-Prelude> readFile "Item10-input.txt"
-Taro"
+Prelude> :t fmap
+fmap :: Functor f => (a -> b) -> f a -> f b
+Prelude> :t fmap (+ 1)
+fmap (+ 1) :: (Functor f, Num b) => f b -> f b
+Prelude> fmap (+ 1) (div2 10)
+Just 6
+Prelude> fmap (+ 1) (div2 13)
+Nothing
 ```
 
-上のソースファイルをロードして、実行してみると、
-Item10-output1.txtが生成され、文字列Hello Taroが入っている。
+型クラスFunctorは上述の関数fmapがうまく定義されているような高階の型クラスである（カインドが* -> *）。
+Maybeは型クラスFunctorのインスタンスであり、Maybeにおける関数fmapは
 
 ```
-Prelude> :cd StudyHaskell\\src
-Prelude> :load Item10-01.hs
-[1 of 1] Compiling Main             ( Item10-01.hs, interpreted )
-Ok, modules loaded: Main.
-*Main> main
-*Main> readFile "Item10-output1.txt"
-"Hello Taro"
+instance Functor Maybe where
+    fmap f (Just x) = Just (f x)
+    fmap f Nothing  = Nothing
 ```
 
-もう一度このソースを見てみよう。
+のように定義されている。
 
-```haskell:Item10-01.hs
-main = do
-  name <- readFile "Item10-input.txt"
-  writeFile "Item10-output1.txt" ("Hello " ++ name)
-```
+## 型クラスMonadと関数(>>=)
 
-name <- readFile "Item10-input.txt"はIO String型の（文脈の付いた）値から中身のString型の値を取り出して、nameで束縛している。
-前節で見たようにdo記法は次のように解釈される。
-
-```haskell:Item10-02.hs
-main = 
-  (readFile "Item10-input.txt") >>= \name -> writeFile "Item10-output1.txt" ("Hello " ++ name)
-```
-
-これを理解するためには関数(>>=)がどう定義されているかを知る必要がある。
-
-## 関数fmap
-
-型IO aは型クラスFunctorに属しており、fmapを使うことができる。
+fmapは便利であるが、fmapだけでは不十分なことがある。
+例えば、16に対して関数div2を2回作用させたいとする。
+このとき、fmap div2の型はMaybe Int -> Maybe (Maybe Int)のようになってしまい、
+戻り値はJust (Just 4)になってしまう。
 
 ```
-*Main> let x = readFile "Item10-input.txt"
-*Main> :t x
-x :: IO String
-*Main> fmap ("Hello " ++ ) x
-"Hello Taro"
+Prelude> :t fmap div2
+fmap div2 :: Functor f => f Int -> f (Maybe Int)
+Prelude> (fmap div2) (div2 16)
+Just (Just 4)
+Prelude> (fmap div2) (div2 14)
+Just Nothing
+Prelude> (fmap div2) (div2 13)
+Nothing
 ```
 
-ここで("Hello " ++)はString -> String型の関数であり、
-ここでのfmapはこの関数とIO String型のxを引数に取って、IO String型の値を戻す高階関数である。
+これは不便である。
+16に対して関数div2を2回作用したときはJust 4が戻ってきて欲しいはずである。
 
-型IO aにおける`fmap :: (a -> b) -> IO a -> IO b`は次のように定義されている。
-
-```
-instance Functor IO where
-    fmap f m = \s -> let (t, x) = m s in (t, f x)
-```
-
-日本語で書くと次のようになる。
-fmapは(a -> b)型の関数fとIO a型の値mを引数に取る高階関数である。
-IO a型はRealWorld -> (RealWorld, a)型のことであった。
-fmapはIO b型の値、つまりRealWorld -> (RealWorld, b)型の関数を戻す。
-この戻される関数は
-「sに対してm s :: (RealWorld, a)の1つ目の要素をt、2つ目の要素をxとして、タプル(t, f x)を戻す関数」である
+関数(>>=)を用いると、div2 :: Int -> Maybe IntをMaybe Int -> Maybe Intのように使うことができる。
+(>>=)はbind演算子ともいう。
 
 ```
-fmap :: (a -> b) -> IO a -> IO b
-fmap f m = \s -> (fst (m s), f snd (m s))
+Prelude> :t (>>=)
+(>>=) :: Monad m => m a -> (a -> m b) -> m b
+Prelude> Just 16 >>= div2
+Just 8
+Prelude> Just 16 >>= div2 >>= div2
+Just 4
+Prelude> Just 16 >>= div2 >>= div2 >>= div2
+Just 2
 ```
 
-のように書いた方がパターンマッチに慣れていない人にはわかりやすいかもしれない。
-元々、mは\s -> (fst (m s), snd (m s))なのだから、
-fmap f mは1つ目の要素についてはmと同様に戻し、2つ目の要素についてのみfを作用させた値を戻す関数である。
-
-IO a型において、fmapはtrivialである。
-文脈側には何もせず、中身に対して作用させるだけのことである。
-
-## 関数(>>=)
-
-型IO aは型クラスMonadに属しており、(>>=)を使うことができる。
-型IO aにおいては、(>>=)の方が非自明であり、fmapよりも本質的な役割を果たす（Maybeにおいては(>>=)よりもfmapが本質的であった）。
-
-型IO aにおける`(>>=) :: IO a -> (a -> IO b) -> IO b`は次のように定義されていると思ってよい。
+型クラスMonadは上述の関数(>>=)などがうまく定義されているような高階の型クラスである（カインドが* -> *）。
+Maybeは型クラスMonadのインスタンスでもあり、Maybeにおける関数(>>=)は
 
 ```
-instance Monad IO where
-m >>= f = \s -> let (t x) = m s 
-                    (u y) = (f x) t
-                    in (u y)
+instance Monad Maybe where
+    Nothing >>= f = Nothing
+    Just x >>= f  = f x
 ```
 
-日本語で書くと次のようになる。
-(>>=)はIO a型の値mと(a -> IO b)型の関数fを引数に取る高階関数である。
-(>>=)はIO b型の値、つまりRealWorld -> (RealWorld, b)型の関数を戻す。
-この戻される関数は
-「sに対してm sの1つ目の要素をt::RealWorld、2つ目の要素をx::aとする。
-f x::IO bはRealWorld -> (RealWorld, b)型の関数であるから、(f x) sは(RealWorld, b)型となる。
-このタプル(u y)を戻す関数」である
+のように定義されている。
 
-```
-(>>=) :: IO a -> (a -> IO b) -> IO b
-m >>= f = \s -> (f snd (m s)) fst (m s)
-```
-
-のように書いた方がパターンマッチに慣れていない人にはわかりやすいかもしれない。
-世界の側だけを見ると、引数に世界sを取って、世界sに対してmを作用した世界をtとし、世界tに対してf xを作用した世界をuとしているので、逐次的である。
-
-```haskell:Item10-02.hs
-main = 
-  (readFile "Item10-input.txt") >>= \name -> writeFile "Item10-output.txt" ("Hello " ++ name)
-```
-
-これの意味は次のようになる。
-(readFile "Item10-input.txt")は世界sを取って、世界tと"Taro"という文字列を返す関数である。
-この文字列に`\name -> writeFile "Item10-output.txt" ("Hello " ++ name)`を作用させると、
-`writeFile "Item10-output.txt" ("Hello Taro") :: IO()`となり、これをtに作用させ、ファイルを書き込んだ後の世界uを戻す。
-つまり、文字列としてはreadFileの中身を取り出して変数nameに束縛して利用し、世界（文脈）としては逐次的に実行している
-（この例の場合、readFileはファイルの状態を変えないので、世界sと世界tは同じ状態であるが）。
-
-この関数(>>=)を用意することによって、入出力を行う関数を自由に合成することができる。
+このように関数(>>=)を使うことによって、
+div2のような「失敗するかもしれない関数」を複数回合成することができる。
 
 ## 関数(>>)
 
 型クラスMonadのインスタンスである型には自動的に関数(>>)が
 
 ```
-(>>) :: Monad m => m a -> m b -> m b
 m >> k = m >>= \_ -> k
 ```
 
-によって定義されるのであった。
-IOに限定すると次のようになる。
+によって定義される（恒等的にkを返すa -> m b型の関数を(>>=)の第2引数に与える）。
+関数(>>)はthenと呼ばれることもあり、型は以下のとおりである。
 
 ```
-(>>) :: IO a -> IO b -> IO b
-m >>= f = \s -> let (t _) = m s 
-                    (u y) = k t
-                    in (u y)
+Prelude> :t (>>)
+(>>) :: Monad m => m a -> m b -> m b
 ```
 
-命令型言語における逐次的実行に相当することがわかるだろう。
+Maybe Int型においては次のように動く。
 
 ```
-*Main> let x = appendFile "Item10-output2.txt" "Hello, "
-*Main> let y = appendFile "Item10-output2.txt" "World!"
-*Main> x >> y
-*Main> readFile "Item10-output2.txt"
-"Hello, World!"
+Prelude> Just 10 >> Just 20
+Just 20
+Prelude> Nothing >> Just 20
+Nothing
+Prelude> Just 10 >> Nothing
+Nothing
+Prelude> Nothing >> Nothing
+Nothing
 ```
+
+命令型言語において逐次実行したときの結果を返すことに似ている。
+上の例においては、m >> kは計算が成功しているときはkの値を返すのであるが、mの計算が失敗したときはNothingを返す。
+この関数(>>)は次項でのdo記法と深い関わりを持つ。
 
 ## 関数join
 
-型クラスMonadに属する型については関数joinを考えることもできる。
+理論的に取り扱うとき、関数(>>=)よりも関数joinを考えた方が理解がしやすいことがある。
 
 ```
-*Main> let join m = m >>= id
-*Main> :t join
-join :: Monad m => m (m b) -> m b
+join :: Maybe (Maybe a) -> Maybe a
+join Nothing = Nothing
+join Just x  = x
 ```
 
-IOにおける関数joinは次のようになる。
+この関数joinを用いると、関数(>>=)は
 
 ```
-join m = \s -> let (t x) = m s 
-                    (u y) = x t
-                    in (u y)
+x >>= f = join (fmap f x)
 ```
 
-世界sに対してm :: IO (IO a)を作用させて世界tと戻り値x :: IO aが得られる。
-このtに対してxを作用させ、世界uと戻り値yを得る。
-join mは世界sに対してこのようなタプルを戻す関数である。
+と書ける。
+つまり、関数(>>=)が行っていることは、
+fmapすることでMaybe (Maybe a)のようになってしまった戻り値を
+joinによってMaybe aに潰していると考えられる。
+
+逆に(>>=)によってjoinを表すことも可能である。
+
+```
+join x = x >>= id
+```
+
+このため、(>>=)を定義することと、joinを定義することは同じことである。
+コードを書く上では(>>=)の方が便利であるが、
+理論的理解の上ではjoinの方が単純で分かりやすいことが多々ある。
 
