@@ -66,25 +66,25 @@ Taroを入力すると、Hello Taroが出力される。
 
 ```
 main = do
-  name <- readFile "Item07-input.txt"
-  writeFile "Item07-output1.txt" ("Hello " ++ name)
+  name <- readFile "Iteminput.txt"
+  writeFile "output.txt" ("Hello " ++ name)
 ```
 
-2行目ではreadFile "Item07-input.txt"の中身をname（String型）で束縛している。
-3行目ではwriteFile "Item07-output1.txt" ("Hello " ++ name)を実行している。
+2行目ではreadFile "input.txt"の中身をname（String型）で束縛している。
+3行目ではwriteFile "output.txt" ("Hello " ++ name)を実行している。
 これは命令型プログラミングにおける逐次実行（をエミュレートしたもの）と考えてよい。
 
-Item07-input.txtには文字列Taroを入れておく。
+input.txtには文字列Taroを入れておく。
 
 ```
 Prelude> :cd source_codes\\StudyHaskell\\src
-Prelude> writeFile "Item07-input.txt" "Taro"
-Prelude> readFile "Item07-input.txt"
+Prelude> writeFile "input.txt" "Taro"
+Prelude> readFile "input.txt"
 Taro"
 ```
 
 上のソースファイルItem07-01.hsをロードして、実行してみると、
-Item07-output1.txtが生成され、文字列Hello Taroが入っている。
+output.txtが生成され、文字列Hello Taroが入っている。
 
 ```
 Prelude> :cd StudyHaskell\\src
@@ -92,7 +92,7 @@ Prelude> :load Item07-01.hs
 [1 of 1] Compiling Main             ( Item07-01.hs, interpreted )
 Ok, modules loaded: Main.
 *Main> main
-*Main> readFile "Item07-output1.txt"
+*Main> readFile "output.txt"
 "Hello Taro"
 ```
 

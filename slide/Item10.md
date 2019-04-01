@@ -159,7 +159,7 @@ Nothing
 
 命令型言語において逐次実行したときの結果を返すことに似ている。
 上の例においては、m >> kは計算が成功しているときはkの値を返すのであるが、mの計算が失敗したときはNothingを返す。
-この関数(>>)は次項でのdo記法と深い関わりを持つ。
+この関数(>>)はItem 12でのdo記法と深い関わりを持つ。
 
 ## 関数join
 
@@ -191,4 +191,50 @@ join x = x >>= id
 このため、(>>=)を定義することと、joinを定義することは同じことである。
 コードを書く上では(>>=)の方が便利であるが、
 理論的理解の上ではjoinの方が単純で分かりやすいことが多々ある。
+
+## do記法
+
+do記法（詳しくはItem 12で述べる）を用いると、Just 16 >>= div2 >>= div2 >>= div2の代わりに次のように書くことができる。
+
+```
+Prelude> :{
+Prelude| do
+Prelude|   x <- Just 16
+Prelude|   y <- div2 x
+Prelude|   z <- div2 y
+Prelude|   div2 z
+Prelude| :}
+Just 2
+```
+
+あたかも命令型言語における逐次実行を実現しているように見えるが、
+これは>>=を使ったコードのシンタックス・シュガーである。
+do記法においては、実行したい命令文を上から順に記述することができ、
+Maybe a型の値（文脈の付いた値）に対しては、<-で中身を取り出すことができる。
+単にa型の値（文脈の付いていない値）に対しては、従来通りletで受ければよい。
+
+```
+Prelude> :{
+Prelude| do
+Prelude|   let x = 16
+Prelude|   y <- div2 x
+Prelude|   z <- div2 y
+Prelude|   div2 z
+Prelude| :}
+Just 2
+```
+
+途中で計算が失敗する場合はNothingを返す。
+命令型言語において例外を投げることに相当する。
+
+```
+Prelude> :{
+Prelude| do
+Prelude|   let x = 13
+Prelude|   y <- div2 x
+Prelude|   z <- div2 y
+Prelude|   div2 z
+Prelude| :}
+Nothing
+```
 

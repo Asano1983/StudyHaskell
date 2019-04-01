@@ -1,2 +1,2 @@
 main =
-  (readFile "Item10-input.txt") >>= \name -> writeFile "Item10-output1.txt" ("Hello " ++ name)
+  (readFile "input.txt") >>= \name -> writeFile "output.txt" ("Hello " ++ name)
